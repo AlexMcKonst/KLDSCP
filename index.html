@@ -1,0 +1,2416 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101114">
+  <title>Калейдоскоп с камеры</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101114;
+      color: #f7f7f8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      background: radial-gradient(ellipse at top, #24262d 0, #101114 58%);
+    }
+
+    main {
+      width: min(100%, 560px);
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: max(28px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 10px 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.5px;
+      text-align: center;
+    }
+
+    .description {
+      margin: 0 0 24px;
+      color: #a9abb4;
+      font-size: 15px;
+      text-align: center;
+    }
+
+    .preview {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      min-height: 240px;
+      max-height: 68vh;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border: 1px solid #34363d;
+      border-radius: 22px;
+      background: #1b1c21;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      max-height: 68vh;
+      object-fit: contain;
+    }
+
+    .mini-canvas {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 80px;
+      border-radius: 12px;
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 10;
+      background: #000;
+      cursor: crosshair;
+    }
+    
+    .mini-canvas[hidden] { display: none; }
+
+    .fullscreen-overlay {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 40px;
+      height: 40px;
+      min-height: unset;
+      padding: 6px;
+      background: rgba(0,0,0,0.5);
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .fullscreen-overlay svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .fullscreen-overlay:active { transform: scale(0.9); }
+
+    .preview:fullscreen {
+      border: none;
+      border-radius: 0;
+      max-height: 100vh;
+      background: #000;
+    }
+    
+    .preview:fullscreen canvas {
+      max-height: 100vh;
+    }
+
+    .switch-cam-overlay, .anim-overlay, .folder-upload-overlay {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      padding: 6px;
+      background: rgba(0,0,0,0.5);
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: white;
+    }
+    
+    .switch-cam-overlay { top: 12px; right: 12px; }
+    .folder-upload-overlay { bottom: 12px; left: 12px; }
+    .anim-overlay { bottom: 12px; right: 12px; z-index: 25; }
+    
+    .stop-cam-overlay {
+      position: absolute;
+      top: 12px;
+      right: 60px;
+      width: 40px;
+      height: 40px;
+      padding: 6px;
+      background: rgba(239, 68, 68, 0.8);
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: white;
+    }
+    .stop-cam-overlay:active { transform: scale(0.9); }
+    .stop-cam-overlay[hidden] { display: none; }
+
+    body.is-mobile .fullscreen-overlay {
+      display: none !important;
+    }
+    body.is-mobile .switch-cam-overlay {
+      top: 12px;
+      right: 12px;
+    }
+    body.is-mobile .stop-cam-overlay {
+      top: 60px;
+      right: 12px;
+    }
+    
+    /* На мобильных смещаем индикатор ниже под кнопку записи, чтобы не перекрывали друг друга */
+    body.is-mobile .cpu-indicator {
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .vertical-slider-container {
+      position: absolute;
+      left: 12px;
+      top: var(--left-slider-top, 110px);
+      bottom: var(--left-slider-bottom, 64px);
+      height: auto;
+      max-height: 32vh;
+      min-height: 60px;
+      margin: auto 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 8px 4px;
+      border-radius: 14px;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .vertical-slider-container[hidden] { display: none !important; }
+    .vertical-slider-container input[type=range] {
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 24px;
+      height: 100%;
+      accent-color: #c5f36b;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .video-controls-overlay {
+      position: absolute;
+      bottom: 12px;
+      left: 60px;
+      right: 60px;
+      height: 40px;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+    }
+    .video-controls-overlay[hidden] { display: none !important; }
+    .video-play-btn {
+      width: 28px;
+      height: 28px;
+      min-height: unset;
+      padding: 0;
+      border-radius: 8px;
+      background: #c5f36b;
+      color: #101114;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .video-play-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .video-timeline {
+      flex: 1;
+      height: 4px;
+      accent-color: #c5f36b;
+      cursor: pointer;
+      margin: 0;
+    }
+    .video-time {
+      font-size: 11px;
+      color: #e2e8f0;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    .folder-upload-overlay:active { transform: scale(0.9); }
+    .folder-upload-overlay[hidden] { display: none; }
+
+    .mirror-overlay-actions {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 15;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 8px;
+      border-radius: 16px;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .mirror-overlay-actions[hidden] { display: none; }
+    .mirror-overlay-actions button {
+      min-height: 36px;
+      min-width: 44px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 10px;
+      border: 1px solid #34363d;
+      border-radius: 10px;
+      background: #30323a;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mirror-overlay-actions button.active {
+      background: #c5f36b;
+      color: #101114;
+      border-color: #c5f36b;
+    }
+    
+    .switch-cam-overlay:active, .anim-overlay:active { transform: scale(0.9); }
+    .anim-overlay.active { background: #c5f36b; color: #101114; border-color: #c5f36b; }
+    .anim-overlay svg { width: 22px; height: 22px; fill: currentColor; }
+
+    .radial-overlay-sliders {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 54%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 15;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 14px;
+      border-radius: 16px;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .radial-overlay-sliders[hidden] { display: none; }
+    
+    .radial-overlay-sliders .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .radial-overlay-sliders label {
+      color: white;
+      font-size: 11px;
+      width: 70px;
+      text-align: right;
+    }
+    .radial-overlay-sliders input[type=range] {
+      flex: 1;
+      height: 4px;
+    }
+
+    .vertical-slider-right {
+      position: absolute;
+      right: 12px;
+      top: var(--left-slider-top, 110px);
+      bottom: var(--left-slider-bottom, 64px);
+      height: auto;
+      max-height: 32vh;
+      min-height: 60px;
+      margin: auto 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 12px 6px;
+      border-radius: 14px;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .vertical-slider-right[hidden] { display: none !important; }
+    .vertical-slider-right input[type=range] {
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 24px;
+      height: 100%;
+      accent-color: #c5f36b;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .mode-actions {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin: 16px 0 0;
+      width: 100%;
+    }
+
+    .mode-actions button {
+      flex: 1;
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid #34363d;
+      border-radius: 12px;
+      background: #1b1c21;
+      color: #a9abb4;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .mode-actions button.active {
+      background: #c5f36b;
+      color: #101114;
+      border-color: #c5f36b;
+      box-shadow: 0 2px 10px rgba(197, 243, 107, 0.3);
+    }
+
+    .quick-settings-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0 0;
+      width: 100%;
+    }
+
+    .quick-settings-row .styled-select {
+      flex: 1;
+      border-radius: 10px;
+      background: #30323a;
+      color: white;
+      border: 0;
+      padding: 8px 12px;
+      outline: none;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .quick-settings-row .anim-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #a9abb4;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin: 0;
+      white-space: nowrap;
+    }
+    
+    .quick-settings-row .anim-toggle input {
+      width: 18px;
+      height: 18px;
+      accent-color: #c5f36b;
+      cursor: pointer;
+    }
+
+    .radial-mask-settings-row {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      margin: 12px 0 0;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .radial-mask-settings-row[hidden] { display: none !important; }
+
+    .placeholder {
+      position: absolute;
+      max-width: 290px;
+      padding: 20px;
+      color: #b7b8c0;
+      line-height: 1.5;
+      text-align: center;
+      z-index: 5;
+    }
+
+    .placeholder[hidden] { display: none; }
+    
+    .placeholder-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    
+    .placeholder-btn {
+      min-height: 48px;
+      border-radius: 14px;
+      background: #30323a;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+    
+    .placeholder-btn:active {
+      transform: scale(0.95);
+      background: #c5f36b;
+      color: #101114;
+      border-color: #c5f36b;
+    }
+
+    .slider-container {
+      width: 100%;
+      margin: 20px 0 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-container label {
+      color: #a9abb4;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      font-weight: 500;
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #c5f36b;
+      cursor: pointer;
+    }
+
+    .controls {
+      width: 100%;
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .save-group {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    
+    .save-group select {
+      border-radius: 15px;
+      background: #30323a;
+      color: white;
+      border: 0;
+      padding: 0 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    
+    .save-group button {
+      flex: 1;
+    }
+
+    .top-record-btn {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 48px;
+      height: 48px;
+      min-height: unset;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 4px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      z-index: 20;
+      padding: 0;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .top-record-btn[hidden] { display: none; }
+    .top-record-btn.recording {
+      background: #ef4444;
+      border-radius: 12px;
+      transform: translateX(-50%) scale(0.85);
+      animation: topPulse 1.5s infinite;
+    }
+    @keyframes topPulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .cpu-indicator {
+      position: absolute;
+      top: 12px;
+      left: 104px;
+      height: 32px;
+      padding: 0 10px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1.5px solid rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #f7f7f8;
+      pointer-events: none;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .cpu-indicator[hidden] { display: none; }
+    .cpu-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .cpu-indicator.warn .cpu-dot {
+      background: #eab308;
+      box-shadow: 0 0 6px #eab308;
+    }
+    .cpu-indicator.high {
+      border-color: rgba(239, 68, 68, 0.8);
+      background: rgba(127, 29, 29, 0.65);
+    }
+    .cpu-indicator.high .cpu-dot {
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      animation: pulse 0.8s infinite;
+    }
+
+    .overload-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(16, 17, 20, 0.82);
+      backdrop-filter: blur(6px);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .overload-modal[hidden] { display: none; }
+    .overload-card {
+      background: #1b1c21;
+      border: 1px solid #ef4444;
+      border-radius: 18px;
+      padding: 20px;
+      max-width: 320px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    }
+    .overload-card h3 {
+      margin: 0 0 8px;
+      color: #ef4444;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .overload-card p {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: #b7b8c0;
+      line-height: 1.45;
+    }
+    .overload-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .overload-actions button {
+      flex: 1;
+      min-height: 40px;
+      padding: 8px 10px;
+      font-size: 13px;
+      border-radius: 10px;
+    }
+    .btn-optimize {
+      background: #c5f36b;
+      color: #101114;
+    }
+    .btn-ignore {
+      background: #30323a;
+      color: #f7f7f8;
+    }
+
+    button {
+      min-height: 54px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 15px;
+      color: white;
+      background: #30323a;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active { transform: scale(.98); }
+    button:disabled { opacity: .45; cursor: default; }
+
+    #saveButton {
+      color: #101114;
+      background: #c5f36b;
+    }
+
+    #status {
+      min-height: 22px;
+      margin: 14px 0 0;
+      color: #a9abb4;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    #cameraVideo {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (max-height: 650px) {
+      .preview { max-height: 58vh; }
+      canvas { max-height: 58vh; }
+      h1 { font-size: 24px; }
+      .description { margin-bottom: 14px; }
+      .controls { margin-top: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Калейдоскоп</h1>
+    <p class="description">Бесшовная генерация паттернов</p>
+
+    <section class="preview" aria-label="Предпросмотр изображения с камеры">
+      <canvas id="resultCanvas" aria-label="Изображение с эффектом калейдоскопа"></canvas>
+      
+      <!-- Smart Overlay for Mirror Guides с кружками-ручками -->
+      <div id="mirrorGuides" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; display:none; overflow:hidden; border-radius:inherit;">
+          <div id="guidesRotator" style="position:absolute; left:0; top:0; width:100%; height:100%; transform-origin: center;">
+              <!-- Horizontal Split (Vertical Axis) -->
+              <div id="guideV" style="position:absolute; height:200%; width:0; top:-50%; border-left: 1.5px dashed rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; transition: border-color 0.2s;">
+                  <div style="width:20px; height:20px; background:rgba(255,255,255,0.85); border-radius:50%; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></div>
+              </div>
+              <!-- Vertical Split (Horizontal Axis) -->
+              <div id="guideH" style="position:absolute; width:200%; height:0; left:-50%; border-top: 1.5px dashed rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; transition: border-color 0.2s;">
+                  <div style="width:20px; height:20px; background:rgba(255,255,255,0.85); border-radius:50%; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></div>
+              </div>
+          </div>
+      </div>
+
+      <canvas id="miniCanvas" class="mini-canvas" aria-label="Мини-превью кадра"></canvas>
+      
+      <div id="cpuIndicator" class="cpu-indicator" hidden>
+        <span class="cpu-dot"></span>
+        <span id="cpuText">CPU: 12%</span>
+      </div>
+      
+      <button id="topRecordBtn" class="top-record-btn" type="button" aria-label="Запись видео" hidden></button>
+
+      <div id="overloadModal" class="overload-modal" hidden role="dialog" aria-modal="true" aria-labelledby="overloadTitle">
+        <div class="overload-card">
+          <h3 id="overloadTitle">⚠️ Перегрузка ЦП</h3>
+          <p id="overloadDesc">Высокая нагрузка на процессор (<span id="overloadVal">95%</span>). Это может вызвать нагрев и задержки видео. Снизить сложность эффектов?</p>
+          <div class="overload-actions">
+            <button type="button" id="optimizeBtn" class="btn-optimize">Оптимизировать</button>
+            <button type="button" id="ignoreOverloadBtn" class="btn-ignore">Продолжить так</button>
+          </div>
+        </div>
+      </div>
+
+      <button id="folderUploadBtn" class="folder-upload-overlay" type="button" aria-label="Загрузить файл">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+      </button>
+
+      <button id="fullscreenBtn" class="fullscreen-overlay" type="button" aria-label="На весь экран">
+        <svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zm5 14h-5v-2h3v-3h2v5zm-14 0v-5h2v3h3v2H5z"/></svg>
+      </button>
+      
+      <button id="switchCamOverlayBtn" class="switch-cam-overlay" type="button" aria-label="Сменить/Включить камеру">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 8.76 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+      </button>
+      <button id="stopCamOverlayBtn" class="stop-cam-overlay" type="button" aria-label="Выключить медиа" hidden>
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+
+      <div id="verticalZoomContainer" class="vertical-slider-container">
+        <input type="range" id="verticalZoomSlider" min="0.5" max="3" step="0.1" value="1" aria-label="Вертикальный масштаб">
+      </div>
+
+      <div id="radialOverlayLeft" class="vertical-slider-container" hidden>
+        <input type="range" id="overlayRadialCopies" min="0" max="8" step="1" value="3" aria-label="Копии (фрактал)">
+      </div>
+
+      <div id="radialOverlayRight" class="vertical-slider-right" hidden>
+        <input type="range" id="overlayRadialRays" min="4" max="36" step="2" value="12" aria-label="Количество лучей">
+      </div>
+
+      <div id="radialOverlayBottom" class="radial-overlay-sliders" hidden>
+        <div class="slider-row">
+          <label>Размер</label>
+          <input type="range" id="overlayCenterSize" min="20" max="100" step="5" value="50">
+        </div>
+        <div class="slider-row">
+          <label>Вращение</label>
+          <input type="range" id="overlayPatternRotation" min="0" max="180" step="5" value="0">
+        </div>
+      </div>
+
+      <button id="animOverlayBtn" class="anim-overlay" type="button" aria-label="Анимация">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+      </button>
+
+      <div id="videoControlsOverlay" class="video-controls-overlay" hidden>
+        <button id="videoPlayPauseBtn" class="video-play-btn" type="button" aria-label="Пуск/Пауза">
+          <svg id="videoPlayIcon" viewBox="0 0 24 24" hidden><path d="M8 5v14l11-7z"/></svg>
+          <svg id="videoPauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <input type="range" id="videoTimeline" class="video-timeline" min="0" max="100" step="0.1" value="0" aria-label="Временная шкала видео">
+        <span id="videoTimeText" class="video-time">0:00</span>
+      </div>
+
+      <div id="mirrorOverlay" class="mirror-overlay-actions" hidden>
+        <button type="button" data-axis="horizontal" class="mirror-btn active">H</button>
+        <button type="button" data-axis="vertical" class="mirror-btn">V</button>
+        <button type="button" data-axis="both" class="mirror-btn">H+V</button>
+        <button type="button" id="mirrorSwapHBtn" class="mirror-btn" style="background: #4f46e5; border-color: #4f46e5;">R/L</button>
+        <button type="button" id="mirrorSwapVBtn" class="mirror-btn" style="background: #4f46e5; border-color: #4f46e5; display: none;">B/T</button>
+      </div>
+
+      <div class="placeholder" id="placeholder">
+        <div class="placeholder-buttons">
+            <button type="button" id="bgFolderBtn" class="placeholder-btn">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                Файл
+            </button>
+            <button type="button" id="bgCamBtn" class="placeholder-btn">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 8.76 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+                Камера
+            </button>
+        </div>
+        Начните творить: загрузите фото или включите камеру
+      </div>
+    </section>
+
+    <div class="mode-actions">
+      <button type="button" data-mode="hex" class="active">Соты</button>
+      <button type="button" data-mode="radial">Радиальный</button>
+      <button type="button" data-mode="mirror">Отражение</button>
+    </div>
+
+    <div class="quick-settings-row">
+      <select id="filterSelect" class="styled-select" aria-label="Визуальный фильтр">
+        <option value="none">Без фильтра</option>
+        <option value="magic">Магия цвета</option>
+        <option value="neon">Неон</option>
+        <option value="bw">Ч/Б</option>
+        <option value="vintage">Винтаж</option>
+        <option value="invert">Инверсия</option>
+      </select>
+      <label class="anim-toggle">
+        <input type="checkbox" id="patternAnimToggle"> Узор
+      </label>
+      <label class="anim-toggle">
+        <input type="checkbox" id="innerAnimToggle"> Кадр
+      </label>
+    </div>
+    
+    <div id="radialMaskMainContainer" class="radial-mask-settings-row" hidden>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <label class="anim-toggle" style="font-size: 14px; font-weight: 600; color: white;">
+              <input type="checkbox" id="radialMaskToggle"> Круглая маска (Скрыть края)
+            </label>
+        </div>
+        <div id="radialMaskOptions" style="display: none; width: 100%; flex-direction: column; gap: 12px; margin-top: 12px;">
+            <div style="display: flex; gap: 12px;">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 12px; color: #a9abb4; text-align: center;">Фон</label>
+                <div style="display: flex; gap: 4px; height: 36px; align-items: center;">
+                    <input type="color" id="radialMaskBgColor" value="#101114" style="flex: 1; height: 36px; border: none; border-radius: 8px; cursor: pointer; background: transparent;" title="Цвет фона">
+                    <button type="button" id="maskBgBtn" style="width: 36px; min-width: 36px; height: 36px; min-height: unset; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; background: #30323a;" title="Загрузить фото/видео на фон">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                    </button>
+                    <button type="button" id="maskBgClearBtn" style="display: none; width: 36px; min-width: 36px; height: 36px; min-height: unset; padding: 0; justify-content: center; align-items: center; border-radius: 8px; background: #ef4444;" title="Удалить файл фона">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                    <input type="file" id="maskBgUpload" accept="image/*,video/*" hidden>
+                </div>
+              </div>
+              
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 12px; color: #a9abb4; text-align: center;">Кромка</label>
+                <input type="color" id="radialMaskBorderColor" value="#c5f36b" style="width: 100%; height: 36px; border: none; border-radius: 8px; cursor: pointer; background: transparent;">
+              </div>
+            </div>
+            <div class="slider-container" style="margin-top: 4px;">
+              <label for="radialMaskBorderWidth">
+                <span>Толщина кромки</span>
+                <span id="radialMaskBorderWidthVal">4px</span>
+              </label>
+              <input type="range" id="radialMaskBorderWidth" min="0" max="40" step="1" value="4">
+            </div>
+        </div>
+    </div>
+
+    <div class="slider-container" id="sourceZoomContainer">
+      <label for="sourceZoomSlider">
+        <span>Увеличение картинки</span>
+        <span id="sourceZoomValue">1.0x</span>
+      </label>
+      <input type="range" id="sourceZoomSlider" min="0.5" max="3" step="0.1" value="1">
+    </div>
+
+    <div class="slider-container">
+      <label for="edgeFeatherSlider">
+        <span>Размазывание краев</span>
+        <span id="edgeFeatherValue">0%</span>
+      </label>
+      <input type="range" id="edgeFeatherSlider" min="0" max="50" step="1" value="0">
+    </div>
+
+    <div class="slider-container">
+      <label for="sizeSlider">
+        <span>Масштаб (жест: щипок)</span>
+        <span id="sizeValue">120</span>
+      </label>
+      <input type="range" id="sizeSlider" min="50" max="400" step="10" value="120">
+    </div>
+
+    <div id="radialSettings" style="display: none; width: 100%;">
+      <div class="slider-container">
+        <label for="radialSegments">
+          <span>Количество лучей</span>
+          <span id="radialSegmentsVal">12</span>
+        </label>
+        <input type="range" id="radialSegments" min="4" max="36" step="2" value="12">
+      </div>
+      <div class="slider-container">
+        <label for="boundaryFeather">
+          <span>Мягкость лучей</span>
+          <span id="boundaryFeatherVal">0%</span>
+        </label>
+        <input type="range" id="boundaryFeather" min="0" max="10" step="1" value="0">
+      </div>
+      <div class="slider-container">
+        <label for="centralPolygonSize">
+          <span>Размер центра</span>
+          <span id="centralPolygonSizeVal">50%</span>
+        </label>
+        <input type="range" id="centralPolygonSize" min="20" max="100" step="5" value="50">
+      </div>
+      <div class="slider-container">
+        <label for="radialCopies">
+          <span>Копии (фрактал)</span>
+          <span id="radialCopiesVal">3</span>
+        </label>
+        <input type="range" id="radialCopies" min="0" max="8" step="1" value="3">
+      </div>
+      <div class="slider-container">
+        <label for="patternRotation">
+          <span>Поворот копий</span>
+          <span id="patternRotationVal">0°</span>
+        </label>
+        <input type="range" id="patternRotation" min="0" max="180" step="5" value="0">
+      </div>
+      <div class="slider-container">
+        <label for="centralPatternFeather">
+          <span>Мягкость копий</span>
+          <span id="centralPatternFeatherVal">0%</span>
+        </label>
+        <input type="range" id="centralPatternFeather" min="0" max="10" step="1" value="0">
+      </div>
+    </div>
+
+    <div class="slider-container">
+      <label for="rotationSlider">
+        <span>Вращение узора (жест: поворот)</span>
+        <span id="rotationValue">0°</span>
+      </label>
+      <input type="range" id="rotationSlider" min="0" max="360" step="1" value="0">
+    </div>
+
+    <div class="controls">
+      <input type="file" id="mediaUpload" accept="image/*,video/*" hidden>
+      <div class="save-group">
+        <select id="aspectRatioSelect" aria-label="Пропорции кадра">
+          <option value="1:1">1:1</option>
+          <option value="3:4">3:4 (Верт)</option>
+          <option value="9:16">9:16 (Верт)</option>
+        </select>
+        <button id="saveButton" type="button" disabled>Сохранить фото (JPG)</button>
+      </div>
+    </div>
+    <p id="status" role="status" aria-live="polite">Разрешите доступ к камере или загрузите файл</p>
+
+    <video id="cameraVideo" autoplay muted playsinline></video>
+  </main>
+
+  <script>
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('resultCanvas');
+    const context = canvas.getContext('2d');
+    const placeholder = document.getElementById('placeholder');
+    const status = document.getElementById('status');
+    const switchCamOverlayBtn = document.getElementById('switchCamOverlayBtn');
+    const stopCamOverlayBtn = document.getElementById('stopCamOverlayBtn');
+    const animOverlayBtn = document.getElementById('animOverlayBtn');
+    const saveButton = document.getElementById('saveButton');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const aspectRatioSelect = document.getElementById('aspectRatioSelect');
+    
+    const folderUploadBtn = document.getElementById('folderUploadBtn');
+    const bgFolderBtn = document.getElementById('bgFolderBtn');
+    const bgCamBtn = document.getElementById('bgCamBtn');
+    const mirrorOverlay = document.getElementById('mirrorOverlay');
+    const previewSection = document.querySelector('.preview');
+
+    const videoControlsOverlay = document.getElementById('videoControlsOverlay');
+    const videoPlayPauseBtn = document.getElementById('videoPlayPauseBtn');
+    const videoPlayIcon = document.getElementById('videoPlayIcon');
+    const videoPauseIcon = document.getElementById('videoPauseIcon');
+    const videoTimeline = document.getElementById('videoTimeline');
+    const videoTimeText = document.getElementById('videoTimeText');
+    let isUploadedVideo = false;
+    let isSeekingVideo = false;
+    
+    const mediaUpload = document.getElementById('mediaUpload');
+    const uploadedImage = new Image();
+    let mediaElement = video;
+    
+    const sizeSlider = document.getElementById('sizeSlider');
+    const sizeValue = document.getElementById('sizeValue');
+    const rotationSlider = document.getElementById('rotationSlider');
+    const rotationValue = document.getElementById('rotationValue');
+    const sourceZoomSlider = document.getElementById('sourceZoomSlider');
+    const verticalZoomSlider = document.getElementById('verticalZoomSlider');
+    const sourceZoomValue = document.getElementById('sourceZoomValue');
+    const sourceZoomContainer = document.getElementById('sourceZoomContainer');
+    const edgeFeatherSlider = document.getElementById('edgeFeatherSlider');
+    const edgeFeatherValue = document.getElementById('edgeFeatherValue');
+    const patternAnimToggle = document.getElementById('patternAnimToggle');
+    const filterSelect = document.getElementById('filterSelect');
+    const topRecordBtn = document.getElementById('topRecordBtn');
+    
+    // ПЕРЕМЕННЫЕ СОСТОЯНИЯ ДЛЯ ПЕРЕТАСКИВАНИЯ КАРТИНКИ И ОСЕЙ
+    let isDraggingMirror = false;
+    let isDraggingAxisV = false;
+    let isDraggingAxisH = false;
+    let mirrorStartX = 0, mirrorStartY = 0;
+    
+    let mirrorFocusX = 0.5, mirrorFocusY = 0.5;
+    let initialMirrorFocusX = 0.5, initialMirrorFocusY = 0.5;
+    
+    let mirrorSplitX = 0.5, mirrorSplitY = 0.5;
+    let initialMirrorSplitX = 0.5, initialMirrorSplitY = 0.5;
+
+    let mirrorSideH = 'right';
+    let mirrorSideV = 'bottom';
+    let currentMirrorAxis = 'horizontal';
+    const mirrorBtns = document.querySelectorAll('.mirror-btn[data-axis]');
+    const mirrorSwapHBtn = document.getElementById('mirrorSwapHBtn');
+    const mirrorSwapVBtn = document.getElementById('mirrorSwapVBtn');
+    
+    const radialSegments = document.getElementById('radialSegments');
+    const radialSegmentsVal = document.getElementById('radialSegmentsVal');
+    const radialCopies = document.getElementById('radialCopies');
+    const radialCopiesVal = document.getElementById('radialCopiesVal');
+    
+    const overlayRadialCopies = document.getElementById('overlayRadialCopies');
+    const overlayRadialRays = document.getElementById('overlayRadialRays');
+    const overlayCenterSize = document.getElementById('overlayCenterSize');
+    const overlayPatternRotation = document.getElementById('overlayPatternRotation');
+    
+    const verticalZoomContainer = document.getElementById('verticalZoomContainer');
+    const radialOverlayLeft = document.getElementById('radialOverlayLeft');
+    const radialOverlayRight = document.getElementById('radialOverlayRight');
+    const radialOverlayBottom = document.getElementById('radialOverlayBottom');
+
+    // Настройки круглой маски
+    const radialMaskMainContainer = document.getElementById('radialMaskMainContainer');
+    const radialMaskToggle = document.getElementById('radialMaskToggle');
+    const radialMaskOptions = document.getElementById('radialMaskOptions');
+    const radialMaskBgColor = document.getElementById('radialMaskBgColor');
+    const radialMaskBorderColor = document.getElementById('radialMaskBorderColor');
+    const radialMaskBorderWidth = document.getElementById('radialMaskBorderWidth');
+    const radialMaskBorderWidthVal = document.getElementById('radialMaskBorderWidthVal');
+
+    const maskBgBtn = document.getElementById('maskBgBtn');
+    const maskBgUpload = document.getElementById('maskBgUpload');
+    const maskBgClearBtn = document.getElementById('maskBgClearBtn');
+    let maskBgImg = null;
+    let maskBgVideo = null;
+    let isMaskBgVideo = false;
+
+    radialMaskToggle.addEventListener('change', (e) => {
+        radialMaskOptions.style.display = e.target.checked ? 'flex' : 'none';
+    });
+    radialMaskBorderWidth.addEventListener('input', (e) => {
+        radialMaskBorderWidthVal.textContent = e.target.value + 'px';
+    });
+
+    maskBgBtn.addEventListener('click', () => maskBgUpload.click());
+
+    maskBgClearBtn.addEventListener('click', () => {
+        maskBgImg = null;
+        if (maskBgVideo) {
+            maskBgVideo.pause();
+            maskBgVideo.src = '';
+            maskBgVideo.load();
+            maskBgVideo = null;
+        }
+        isMaskBgVideo = false;
+        maskBgClearBtn.style.display = 'none';
+        maskBgUpload.value = '';
+    });
+
+    maskBgUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const url = URL.createObjectURL(file);
+
+        if (file.type.startsWith('video/')) {
+            maskBgImg = null;
+            if (maskBgVideo) maskBgVideo.pause();
+            else {
+                maskBgVideo = document.createElement('video');
+                maskBgVideo.loop = true;
+                maskBgVideo.muted = true;
+                maskBgVideo.playsInline = true;
+            }
+            maskBgVideo.src = url;
+            isMaskBgVideo = true;
+            maskBgVideo.play().catch(console.error);
+            maskBgClearBtn.style.display = 'flex';
+        } else if (file.type.startsWith('image/')) {
+            isMaskBgVideo = false;
+            if (maskBgVideo) {
+                maskBgVideo.pause();
+                maskBgVideo = null;
+            }
+            maskBgImg = new Image();
+            maskBgImg.onload = () => { maskBgClearBtn.style.display = 'flex'; };
+            maskBgImg.src = url;
+        }
+    });
+
+    overlayRadialCopies.addEventListener('input', (e) => { 
+      radialCopies.value = e.target.value; 
+      radialCopiesVal.textContent = e.target.value;
+    });
+    overlayRadialRays.addEventListener('input', (e) => { 
+      radialSegments.value = e.target.value; 
+      radialSegmentsVal.textContent = e.target.value;
+    });
+    overlayCenterSize.addEventListener('input', (e) => { 
+      document.getElementById('centralPolygonSize').value = e.target.value; 
+      document.getElementById('centralPolygonSizeVal').textContent = e.target.value + '%';
+    });
+    overlayPatternRotation.addEventListener('input', (e) => { 
+      document.getElementById('patternRotation').value = e.target.value; 
+      document.getElementById('patternRotationVal').textContent = e.target.value + '°';
+    });
+
+    radialCopies.addEventListener('input', (e) => {
+      overlayRadialCopies.value = e.target.value;
+      radialCopiesVal.textContent = e.target.value;
+    });
+    radialSegments.addEventListener('input', (e) => {
+      overlayRadialRays.value = e.target.value;
+      radialSegmentsVal.textContent = e.target.value;
+    });
+    document.getElementById('centralPolygonSize').addEventListener('input', (e) => overlayCenterSize.value = e.target.value);
+    document.getElementById('patternRotation').addEventListener('input', (e) => overlayPatternRotation.value = e.target.value);
+
+    const miniCanvas = document.getElementById('miniCanvas');
+    const miniCtx = miniCanvas.getContext('2d');
+
+    const cpuIndicator = document.getElementById('cpuIndicator');
+    const cpuText = document.getElementById('cpuText');
+    const overloadModal = document.getElementById('overloadModal');
+    const overloadVal = document.getElementById('overloadVal');
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const ignoreOverloadBtn = document.getElementById('ignoreOverloadBtn');
+
+    let smoothedCpuLoad = 15;
+    let lastFrameTimestamp = performance.now();
+    let smoothedFps = 60;
+    let highLoadStreak = 0;
+    let overloadSnoozeUntil = 0;
+    let lastCpuUiUpdate = 0;
+
+    optimizeBtn.addEventListener('click', () => {
+      document.getElementById('boundaryFeather').value = 0;
+      document.getElementById('boundaryFeatherVal').textContent = '0%';
+      document.getElementById('centralPatternFeather').value = 0;
+      document.getElementById('centralPatternFeatherVal').textContent = '0%';
+      edgeFeatherSlider.value = 0;
+      edgeFeatherValue.textContent = '0%';
+
+      if (currentMode === 'radial') {
+        if (Number(radialCopies.value) > 2) {
+          radialCopies.value = 2;
+          overlayRadialCopies.value = 2;
+          radialCopiesVal.textContent = '2';
+        }
+        if (Number(radialSegments.value) > 12) {
+          radialSegments.value = 12;
+          overlayRadialRays.value = 12;
+          radialSegmentsVal.textContent = '12';
+        }
+      } else if (currentMode === 'hex') {
+        if (Number(sizeSlider.value) < 140) {
+          sizeSlider.value = 160;
+          sizeValue.textContent = '160';
+        }
+      }
+
+      overloadModal.hidden = true;
+      highLoadStreak = 0;
+      smoothedCpuLoad = 30;
+      overloadSnoozeUntil = performance.now() + 15000;
+      status.textContent = 'Настройки оптимизированы для снижения нагрузки ЦП';
+    });
+
+    ignoreOverloadBtn.addEventListener('click', () => {
+      overloadModal.hidden = true;
+      highLoadStreak = 0;
+      overloadSnoozeUntil = performance.now() + 30000;
+      status.textContent = 'Предупреждение отложено на 30 сек.';
+    });
+
+    const radialCanvas = document.createElement('canvas');
+    const radialContext = radialCanvas.getContext('2d', {willReadFrequently: true});
+    const wedgeCanvas = document.createElement('canvas');
+    const wedgeContext = wedgeCanvas.getContext('2d', {willReadFrequently: true});
+    const featherMaskCanvas = document.createElement('canvas');
+    const featherMaskContext = featherMaskCanvas.getContext('2d', {willReadFrequently: true});
+    const centralPatternCanvas = document.createElement('canvas');
+    const centralPatternContext = centralPatternCanvas.getContext('2d', {willReadFrequently: true});
+    const centralPolygonMaskCanvas = document.createElement('canvas');
+    const centralPolygonMaskContext = centralPolygonMaskCanvas.getContext('2d', {willReadFrequently: true});
+    let featherMaskKey = '';
+    let centralPolygonMaskKey = '';
+
+    const sourceCanvas = document.createElement('canvas');
+    const sourceCtx = sourceCanvas.getContext('2d');
+
+    let stream = null;
+    let facingMode = 'environment';
+    let animationFrame = null;
+    let hasFrame = false;
+
+    let isRecording = false;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    
+    let currentFocusX = 0.5, currentFocusY = 0.5;
+    let targetFocusX = 0.5, targetFocusY = 0.5;
+    
+    let innerAngle = 0;
+    let isInnerAnimating = false;
+    let isPatternAnimating = false;
+    let globalRotationAngle = 0;
+    
+    let currentFilter = 'none';
+    let currentMode = 'hex';
+
+    const segments = 6; 
+    
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+
+    sizeSlider.addEventListener('input', (e) => { sizeValue.textContent = e.target.value; });
+    
+    function updateZoom(val) {
+        sourceZoomSlider.value = val;
+        verticalZoomSlider.value = val;
+        sourceZoomValue.textContent = parseFloat(val).toFixed(1) + 'x';
+    }
+    
+    sourceZoomSlider.addEventListener('input', (e) => updateZoom(e.target.value));
+    verticalZoomSlider.addEventListener('input', (e) => updateZoom(e.target.value));
+
+    edgeFeatherSlider.addEventListener('input', (e) => { edgeFeatherValue.textContent = e.target.value + '%'; });
+    
+    document.getElementById('boundaryFeather').addEventListener('input', e => document.getElementById('boundaryFeatherVal').textContent = e.target.value + '%');
+    document.getElementById('centralPolygonSize').addEventListener('input', e => document.getElementById('centralPolygonSizeVal').textContent = e.target.value + '%');
+    document.getElementById('patternRotation').addEventListener('input', e => document.getElementById('patternRotationVal').textContent = e.target.value + '°');
+    document.getElementById('centralPatternFeather').addEventListener('input', e => document.getElementById('centralPatternFeatherVal').textContent = e.target.value + '%');
+
+    folderUploadBtn.addEventListener('click', () => mediaUpload.click());
+    bgFolderBtn.addEventListener('click', () => mediaUpload.click());
+    bgCamBtn.addEventListener('click', () => switchCamOverlayBtn.click());
+
+    mirrorBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            mirrorBtns.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            currentMirrorAxis = e.target.dataset.axis;
+            
+            if (currentMirrorAxis === 'both') {
+                mirrorSwapHBtn.style.display = 'block';
+                mirrorSwapVBtn.style.display = 'block';
+            } else if (currentMirrorAxis === 'horizontal') {
+                mirrorSwapHBtn.style.display = 'block';
+                mirrorSwapVBtn.style.display = 'none';
+            } else if (currentMirrorAxis === 'vertical') {
+                mirrorSwapHBtn.style.display = 'none';
+                mirrorSwapVBtn.style.display = 'block';
+            }
+        });
+    });
+
+    mirrorSwapHBtn.addEventListener('click', () => {
+        mirrorSideH = mirrorSideH === 'right' ? 'left' : 'right';
+        mirrorSwapHBtn.textContent = mirrorSideH === 'right' ? 'R/L' : 'L/R';
+    });
+
+    mirrorSwapVBtn.addEventListener('click', () => {
+        mirrorSideV = mirrorSideV === 'bottom' ? 'top' : 'bottom';
+        mirrorSwapVBtn.textContent = mirrorSideV === 'bottom' ? 'B/T' : 'T/B';
+    });
+
+    rotationSlider.addEventListener('input', (e) => { 
+        globalRotationAngle = parseFloat(e.target.value);
+        rotationValue.textContent = Math.round(globalRotationAngle) + '°'; 
+    });
+
+    document.getElementById('innerAnimToggle').addEventListener('change', (e) => {
+        isInnerAnimating = e.target.checked;
+        syncAnimOverlayBtn();
+    });
+
+    patternAnimToggle.addEventListener('change', (e) => {
+        isPatternAnimating = e.target.checked;
+        syncAnimOverlayBtn();
+    });
+    
+    function syncAnimOverlayBtn() {
+        if (isPatternAnimating || isInnerAnimating) {
+            animOverlayBtn.classList.add('active');
+        } else {
+            animOverlayBtn.classList.remove('active');
+        }
+    }
+
+    animOverlayBtn.addEventListener('click', () => {
+        const isAnyActive = isPatternAnimating || isInnerAnimating;
+        if (isAnyActive) {
+            isPatternAnimating = false;
+            isInnerAnimating = false;
+        } else {
+            isPatternAnimating = false;
+            isInnerAnimating = true;
+        }
+        patternAnimToggle.checked = isPatternAnimating;
+        document.getElementById('innerAnimToggle').checked = isInnerAnimating;
+        syncAnimOverlayBtn();
+    });
+
+    filterSelect.addEventListener('change', (e) => { currentFilter = e.target.value; });
+
+    function formatVideoTime(sec) {
+      if (!isFinite(sec) || sec < 0) return '0:00';
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function updateVideoPlayIcon() {
+      const paused = video.paused;
+      videoPlayIcon.hidden = !paused;
+      videoPauseIcon.hidden = paused;
+    }
+
+    videoPlayPauseBtn.addEventListener('click', () => {
+      if (!isUploadedVideo) return;
+      if (video.paused) { video.play(); } else { video.pause(); }
+      updateVideoPlayIcon();
+    });
+
+    videoTimeline.addEventListener('input', (e) => {
+      if (!isUploadedVideo || !video.duration) return;
+      isSeekingVideo = true;
+      const targetTime = (parseFloat(e.target.value) / 100) * video.duration;
+      video.currentTime = targetTime;
+      videoTimeText.textContent = formatVideoTime(targetTime);
+    });
+
+    videoTimeline.addEventListener('change', () => { isSeekingVideo = false; });
+
+    video.addEventListener('timeupdate', () => {
+      if (!isUploadedVideo || isSeekingVideo || !video.duration) return;
+      videoTimeline.value = (video.currentTime / video.duration) * 100;
+      videoTimeText.textContent = formatVideoTime(video.currentTime);
+    });
+
+    video.addEventListener('play', updateVideoPlayIcon);
+    video.addEventListener('pause', updateVideoPlayIcon);
+
+    function updateBottomOverlaysPosition() {
+      const bottomSpace = isUploadedVideo ? 64 : 20;
+      
+      if (mirrorOverlay) mirrorOverlay.style.bottom = bottomSpace + 'px';
+      if (radialOverlayBottom) radialOverlayBottom.style.bottom = bottomSpace + 'px';
+      
+      const miniHeight = (!miniCanvas.hidden && miniCanvas.style.display !== 'none') ? (miniCanvas.offsetHeight || 80) : 12;
+      previewSection.style.setProperty('--left-slider-top', (miniHeight + 20) + 'px');
+      
+      let sideBottomSpace = isUploadedVideo ? 64 : 20;
+      if (currentMode === 'mirror' || currentMode === 'radial') sideBottomSpace += 45;
+      
+      previewSection.style.setProperty('--left-slider-bottom', sideBottomSpace + 'px');
+    }
+
+    window.addEventListener('resize', updateBottomOverlaysPosition);
+
+    async function startCamera() {
+      stopStream();
+      status.textContent = 'Подключаем камеру…';
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+        mediaElement = video;
+        video.srcObject = stream;
+        await video.play();
+        placeholder.hidden = true;
+        miniCanvas.hidden = false;
+        cpuIndicator.hidden = false;
+        topRecordBtn.hidden = false;
+        stopCamOverlayBtn.hidden = false;
+        folderUploadBtn.hidden = true;
+        switchCamOverlayBtn.hidden = false;
+        
+        switchCamOverlayBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 8.76 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>';
+        
+        status.textContent = 'Камера включена';
+        updateBottomOverlaysPosition();
+        drawFrame();
+      } catch (error) {
+        status.textContent = 'Не удалось включить камеру. Проверьте разрешения.';
+      }
+    }
+
+    function drawFrame() {
+      const frameStartTime = performance.now();
+      const frameDelta = frameStartTime - lastFrameTimestamp;
+      lastFrameTimestamp = frameStartTime;
+
+      const isVideo = mediaElement.tagName === 'VIDEO';
+      if (isVideo && (!mediaElement.readyState || mediaElement.readyState < 2)) {
+        animationFrame = requestAnimationFrame(drawFrame);
+        return;
+      }
+
+      const mw = isVideo ? mediaElement.videoWidth : mediaElement.naturalWidth;
+      const mh = isVideo ? mediaElement.videoHeight : mediaElement.naturalHeight;
+
+      if (!mw || !mh) {
+        animationFrame = requestAnimationFrame(drawFrame);
+        return;
+      }
+
+      const ratio = aspectRatioSelect.value;
+      let targetW = 1080, targetH = 1080;
+      if (ratio === '9:16') { targetW = 1080; targetH = 1920; }
+      else if (ratio === '3:4') { targetW = 1080; targetH = 1440; }
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      if (miniCanvas.width !== mw || miniCanvas.height !== mh) {
+        miniCanvas.width = mw;
+        miniCanvas.height = mh;
+      }
+      miniCtx.drawImage(mediaElement, 0, 0, mw, mh);
+
+      currentFocusX += (targetFocusX - currentFocusX) * 0.1;
+      currentFocusY += (targetFocusY - currentFocusY) * 0.1;
+
+      if (currentMode !== 'mirror') {
+        miniCtx.fillStyle = 'rgba(255, 60, 60, 0.9)';
+        miniCtx.beginPath();
+        miniCtx.arc(mw * currentFocusX, mh * currentFocusY, Math.min(mw, mh) * 0.05, 0, Math.PI * 2);
+        miniCtx.fill();
+      }
+
+      if (isInnerAnimating) {
+          innerAngle += 0.01;
+          innerAngle = innerAngle % (Math.PI * 2);
+      } else if (innerAngle !== 0) {
+          if (innerAngle > Math.PI) {
+              innerAngle += (Math.PI * 2 - innerAngle) * 0.05;
+              if (Math.PI * 2 - innerAngle < 0.001) innerAngle = 0;
+          } else {
+              innerAngle -= innerAngle * 0.05;
+              if (innerAngle < 0.001) innerAngle = 0;
+          }
+      }
+
+      if (isPatternAnimating) {
+          globalRotationAngle += 0.15;
+          if (globalRotationAngle >= 360) globalRotationAngle -= 360;
+          rotationSlider.value = Math.round(globalRotationAngle);
+          rotationValue.textContent = Math.round(globalRotationAngle) + '°';
+      }
+
+      const previewRect = canvas.parentElement.getBoundingClientRect();
+      const pixelRatioScale = canvas.height / previewRect.height;
+
+      if (currentMode === 'hex') {
+          renderKaleidoscope(context, canvas.width, canvas.height, pixelRatioScale);
+      } else if (currentMode === 'radial') {
+          renderRadial(context, canvas.width, canvas.height);
+      } else if (currentMode === 'mirror') {
+          renderMirror(context, canvas.width, canvas.height);
+      }
+
+      // Обновление умных осевых линий (HTML Overlay)
+      const mirrorGuidesUI = document.getElementById('mirrorGuides');
+      if (currentMode === 'mirror' && hasFrame) {
+          mirrorGuidesUI.style.display = 'block';
+          document.getElementById('guidesRotator').style.transform = `rotate(${globalRotationAngle}deg)`;
+          
+          const guideH = document.getElementById('guideH');
+          const guideV = document.getElementById('guideV');
+          
+          guideH.style.display = (currentMirrorAxis === 'both' || currentMirrorAxis === 'vertical') ? 'flex' : 'none';
+          guideV.style.display = (currentMirrorAxis === 'both' || currentMirrorAxis === 'horizontal') ? 'flex' : 'none';
+          
+          guideV.style.left = `${mirrorSplitX * 100}%`;
+          guideH.style.top = `${mirrorSplitY * 100}%`;
+          
+          guideV.style.borderColor = isDraggingAxisV ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.4)';
+          guideH.style.borderColor = isDraggingAxisH ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.4)';
+      } else {
+          mirrorGuidesUI.style.display = 'none';
+      }
+
+      hasFrame = true;
+      saveButton.disabled = false;
+
+      const renderDuration = performance.now() - frameStartTime;
+      const instantFps = frameDelta > 0 ? Math.min(60, 1000 / frameDelta) : 60;
+      smoothedFps = smoothedFps * 0.9 + instantFps * 0.1;
+
+      const renderRatio = (renderDuration / 16.67) * 100;
+      const fpsPenalty = Math.max(0, (55 - smoothedFps) * 1.6);
+      const rawLoad = Math.min(100, Math.max(5, renderRatio + fpsPenalty));
+      smoothedCpuLoad = smoothedCpuLoad * 0.88 + rawLoad * 0.12;
+
+      if (frameStartTime - lastCpuUiUpdate > 250) {
+        lastCpuUiUpdate = frameStartTime;
+        const loadInt = Math.round(smoothedCpuLoad);
+        const fpsInt = Math.round(smoothedFps);
+        cpuText.textContent = `CPU: ${loadInt}% (${fpsInt} FPS)`;
+
+        cpuIndicator.classList.remove('warn', 'high');
+        if (loadInt >= 85 || fpsInt < 18) {
+          cpuIndicator.classList.add('high');
+        } else if (loadInt >= 60 || fpsInt < 30) {
+          cpuIndicator.classList.add('warn');
+        }
+
+        if ((loadInt >= 85 || fpsInt < 18) && frameStartTime > overloadSnoozeUntil) {
+          highLoadStreak++;
+          if (highLoadStreak >= 10 && overloadModal.hidden) {
+            overloadVal.textContent = `${loadInt}% / ${fpsInt} FPS`;
+            overloadModal.hidden = false;
+          }
+        } else {
+          highLoadStreak = Math.max(0, highLoadStreak - 1);
+        }
+      }
+
+      animationFrame = requestAnimationFrame(drawFrame);
+    }
+
+    function getFilterString() {
+      if (currentFilter === 'neon') return 'saturate(300%) contrast(150%) brightness(120%)';
+      if (currentFilter === 'bw') return 'grayscale(100%)';
+      if (currentFilter === 'vintage') return 'sepia(80%) contrast(120%)';
+      if (currentFilter === 'invert') return 'invert(100%)';
+      if (currentFilter === 'magic') return `saturate(200%) hue-rotate(${performance.now() / 10}deg)`;
+      return 'none';
+    }
+
+    function prepareSourceCanvas(canvasW, canvasH) {
+      if (sourceCanvas.width !== canvasW || sourceCanvas.height !== canvasH) {
+        sourceCanvas.width = canvasW;
+        sourceCanvas.height = canvasH;
+      }
+      const isVideo = mediaElement.tagName === 'VIDEO';
+      const w = isVideo ? mediaElement.videoWidth : mediaElement.naturalWidth;
+      const h = isVideo ? mediaElement.videoHeight : mediaElement.naturalHeight;
+      const sz = parseFloat(sourceZoomSlider.value);
+      const baseScale = Math.max(canvasW/w, canvasH/h) * (parseInt(sizeSlider.value, 10) / 120) * sz;
+
+      const focusX = currentMode === 'mirror' ? mirrorFocusX : currentFocusX;
+      const focusY = currentMode === 'mirror' ? mirrorFocusY : currentFocusY;
+
+      sourceCtx.clearRect(0, 0, canvasW, canvasH);
+      sourceCtx.save();
+      sourceCtx.translate(canvasW / 2, canvasH / 2);
+      sourceCtx.scale(baseScale, baseScale);
+      sourceCtx.rotate(innerAngle);
+      sourceCtx.translate(-w * focusX, -h * focusY);
+      if (stream && facingMode === 'user') {
+          sourceCtx.translate(w, 0);
+          sourceCtx.scale(-1, 1);
+      }
+      
+      sourceCtx.filter = getFilterString();
+      sourceCtx.drawImage(mediaElement, 0, 0, w, h);
+      sourceCtx.restore();
+
+      const featherPercent = parseInt(edgeFeatherSlider.value, 10);
+      if (featherPercent > 0) {
+        sourceCtx.save();
+        sourceCtx.globalCompositeOperation = 'destination-in';
+        const gradient = sourceCtx.createRadialGradient(
+           canvasW/2, canvasH/2, (Math.min(canvasW, canvasH) / 2) * (1 - featherPercent/100),
+           canvasW/2, canvasH/2, Math.min(canvasW, canvasH) / 2
+        );
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        sourceCtx.fillStyle = gradient;
+        sourceCtx.fillRect(0, 0, canvasW, canvasH);
+        sourceCtx.restore();
+      }
+    }
+
+    // Обновленная функция нарезки для зеркала, учитывающая смещенную ось
+    function drawMirroredHalf(width, height, source, axis, side, target, splitRatio) {
+      const verticalAxis = axis === 'vertical';
+      const split = verticalAxis ? Math.round(height * splitRatio) : Math.round(width * splitRatio);
+
+      if (verticalAxis) {
+        if (side === 'bottom') { // верхняя часть источника отражается вниз
+          target.drawImage(source, 0, 0, width, split, 0, 0, width, split);
+          target.save();
+          target.translate(0, split * 2);
+          target.scale(1, -1);
+          target.drawImage(source, 0, 0, width, split, 0, 0, width, split);
+          target.restore();
+        } else { // нижняя часть источника отражается наверх
+          target.drawImage(source, 0, split, width, height - split, 0, split, width, height - split);
+          target.save();
+          target.translate(0, split * 2);
+          target.scale(1, -1);
+          target.drawImage(source, 0, split, width, height - split, 0, split, width, height - split);
+          target.restore();
+        }
+      } else {
+        if (side === 'right') { // левая часть источника отражается вправо
+          target.drawImage(source, 0, 0, split, height, 0, 0, split, height);
+          target.save();
+          target.translate(split * 2, 0);
+          target.scale(-1, 1);
+          target.drawImage(source, 0, 0, split, height, 0, 0, split, height);
+          target.restore();
+        } else { // правая часть источника отражается влево
+          target.drawImage(source, split, 0, width - split, height, split, 0, width - split, height);
+          target.save();
+          target.translate(split * 2, 0);
+          target.scale(-1, 1);
+          target.drawImage(source, split, 0, width - split, height, 0, 0, width - split, height);
+          target.restore();
+        }
+      }
+    }
+
+    function renderMirror(targetCtx, canvasW, canvasH) {
+      prepareSourceCanvas(canvasW, canvasH);
+
+      targetCtx.fillStyle = '#101114';
+      targetCtx.fillRect(0, 0, canvasW, canvasH);
+      targetCtx.save();
+
+      const globalRotationRad = globalRotationAngle * Math.PI / 180;
+      targetCtx.translate(canvasW / 2, canvasH / 2);
+      targetCtx.rotate(globalRotationRad);
+      targetCtx.translate(-canvasW / 2, -canvasH / 2);
+
+      if (currentMirrorAxis === 'both') {
+          if (radialCanvas.width !== canvasW || radialCanvas.height !== canvasH) {
+            radialCanvas.width = canvasW;
+            radialCanvas.height = canvasH;
+          }
+          radialContext.setTransform(1, 0, 0, 1, 0, 0);
+          radialContext.clearRect(0, 0, canvasW, canvasH);
+          drawMirroredHalf(canvasW, canvasH, sourceCanvas, 'horizontal', mirrorSideH, radialContext, mirrorSplitX);
+          drawMirroredHalf(canvasW, canvasH, radialCanvas, 'vertical', mirrorSideV, targetCtx, mirrorSplitY);
+      } else if (currentMirrorAxis === 'horizontal') {
+          drawMirroredHalf(canvasW, canvasH, sourceCanvas, 'horizontal', mirrorSideH, targetCtx, mirrorSplitX);
+      } else {
+          drawMirroredHalf(canvasW, canvasH, sourceCanvas, 'vertical', mirrorSideV, targetCtx, mirrorSplitY);
+      }
+      targetCtx.restore();
+    }
+
+    function drawKaleidoscope(width, height, sectorCount, source, target) {
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const sectorAngle = (Math.PI * 2) / sectorCount;
+      const radius = Math.hypot(centerX, centerY) + 1;
+
+      if (wedgeCanvas.width !== width || wedgeCanvas.height !== height) {
+        wedgeCanvas.width = width;
+        wedgeCanvas.height = height;
+      }
+      wedgeContext.setTransform(1, 0, 0, 1, 0, 0);
+      wedgeContext.clearRect(0, 0, width, height);
+      wedgeContext.save();
+      wedgeContext.translate(centerX, centerY);
+      wedgeContext.beginPath();
+      wedgeContext.moveTo(0, 0);
+      wedgeContext.arc(0, 0, radius, -sectorAngle / 2, sectorAngle / 2);
+      wedgeContext.closePath();
+      wedgeContext.clip();
+      wedgeContext.drawImage(source, -centerX, -centerY, width, height);
+      wedgeContext.restore();
+
+      const feather = Math.min(width, height) * Number(document.getElementById('boundaryFeather').value) / 100;
+      if (feather > 0) {
+        const maskKey = `${width}x${height}:${sectorCount}:${feather}`;
+        if (featherMaskKey !== maskKey) {
+          featherMaskCanvas.width = width;
+          featherMaskCanvas.height = height;
+          const maskImage = featherMaskContext.createImageData(width, height);
+          const halfAngle = sectorAngle / 2;
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const dx = x + 0.5 - centerX;
+              const dy = y + 0.5 - centerY;
+              const distanceFromCenter = Math.hypot(dx, dy);
+              const angle = Math.abs(Math.atan2(dy, dx));
+              const localFeather = Math.min(feather, distanceFromCenter * Math.sin(halfAngle));
+              const alpha = localFeather === 0 ? 1 : Math.max(0, Math.min(1,
+                (distanceFromCenter * Math.sin(halfAngle - angle) + localFeather) / (2 * localFeather)
+              ));
+              const pixel = (y * width + x) * 4;
+              maskImage.data[pixel] = 255;
+              maskImage.data[pixel + 1] = 255;
+              maskImage.data[pixel + 2] = 255;
+              maskImage.data[pixel + 3] = Math.round(alpha * 255);
+            }
+          }
+          featherMaskContext.putImageData(maskImage, 0, 0);
+          featherMaskKey = maskKey;
+        }
+        wedgeContext.save();
+        wedgeContext.globalCompositeOperation = 'destination-in';
+        wedgeContext.drawImage(featherMaskCanvas, 0, 0);
+        wedgeContext.restore();
+      }
+
+      target.clearRect(0, 0, width, height);
+      for (let i = 0; i < sectorCount; i++) {
+        target.save();
+        target.translate(centerX, centerY);
+        target.rotate(i * sectorAngle);
+        if (i % 2 === 1) target.scale(1, -1);
+        target.drawImage(wedgeCanvas, -centerX, -centerY, width, height);
+        target.restore();
+      }
+    }
+
+    function drawRadialKaleidoscope(width, height, sectorCount, source, target) {
+      if (radialCanvas.width !== width || radialCanvas.height !== height) {
+        radialCanvas.width = width;
+        radialCanvas.height = height;
+      }
+      radialContext.setTransform(1, 0, 0, 1, 0, 0);
+      radialContext.clearRect(0, 0, width, height);
+      drawKaleidoscope(width, height, sectorCount, source, radialContext);
+
+      const sourceWidth = Math.max(2, Math.floor(width / 2));
+      const sourceHeight = Math.max(2, Math.floor(height / 2));
+      const sourceX = (width - sourceWidth) / 2;
+      const sourceY = (height - sourceHeight) / 2;
+
+      target.drawImage(radialCanvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const polygonSides = Math.max(3, sectorCount);
+      const patternSize = Math.min(sourceWidth, sourceHeight);
+      const patternSourceX = centerX - patternSize / 2;
+      const patternSourceY = centerY - patternSize / 2;
+      const centralDiameter = Math.min(width, height) * Number(document.getElementById('centralPolygonSize').value) / 100;
+      const backgroundDiameter = Math.max(width, height);
+      const copyCount = Number(document.getElementById('radialCopies').value);
+
+      function drawPolygonCopy(diameter, softenEdge = false) {
+        const radius = diameter / 2;
+        const rotation = Number(document.getElementById('patternRotation').value) * Math.PI / 180 * Math.min(1, diameter / backgroundDiameter);
+
+        if (softenEdge) {
+          const textureSize = Math.max(1, Math.ceil(diameter));
+          const feather = diameter * Number(document.getElementById('centralPatternFeather').value) / 100;
+          if (centralPatternCanvas.width !== textureSize || centralPatternCanvas.height !== textureSize) {
+            centralPatternCanvas.width = textureSize; centralPatternCanvas.height = textureSize;
+          }
+          if (centralPolygonMaskCanvas.width !== textureSize || centralPolygonMaskCanvas.height !== textureSize) {
+            centralPolygonMaskCanvas.width = textureSize; centralPolygonMaskCanvas.height = textureSize;
+            centralPolygonMaskKey = '';
+          }
+
+          const maskKey = `${textureSize}:${polygonSides}:${feather}`;
+          if (centralPolygonMaskKey !== maskKey) {
+            const maskImage = centralPolygonMaskContext.createImageData(textureSize, textureSize);
+            const maskCenter = textureSize / 2;
+            const apothem = radius * Math.cos(Math.PI / polygonSides);
+            const normals = Array.from({ length: polygonSides }, (_, i) => {
+              const angle = -Math.PI / 2 + ((i + 0.5) * Math.PI * 2) / polygonSides;
+              return [Math.cos(angle), Math.sin(angle)];
+            });
+            for (let y = 0; y < textureSize; y++) {
+              for (let x = 0; x < textureSize; x++) {
+                const dx = x + 0.5 - maskCenter;
+                const dy = y + 0.5 - maskCenter;
+                let distanceToEdge = Infinity;
+                for (const [normalX, normalY] of normals) {
+                  distanceToEdge = Math.min(distanceToEdge, apothem - dx * normalX - dy * normalY);
+                }
+                const alpha = feather === 0 ? (distanceToEdge >= 0 ? 1 : 0) : Math.max(0, Math.min(1, distanceToEdge / feather));
+                const pixel = (y * textureSize + x) * 4;
+                maskImage.data[pixel] = 255; maskImage.data[pixel + 1] = 255; maskImage.data[pixel + 2] = 255; maskImage.data[pixel + 3] = Math.round(alpha * 255);
+              }
+            }
+            centralPolygonMaskContext.putImageData(maskImage, 0, 0);
+            centralPolygonMaskKey = maskKey;
+          }
+
+          centralPatternContext.clearRect(0, 0, textureSize, textureSize);
+          centralPatternContext.save();
+          centralPatternContext.translate(textureSize / 2, textureSize / 2);
+          centralPatternContext.rotate(rotation);
+          centralPatternContext.drawImage(radialCanvas, patternSourceX, patternSourceY, patternSize, patternSize, -radius, -radius, diameter, diameter);
+          centralPatternContext.restore();
+          centralPatternContext.globalCompositeOperation = 'destination-in';
+          centralPatternContext.drawImage(centralPolygonMaskCanvas, 0, 0);
+          centralPatternContext.globalCompositeOperation = 'source-over';
+          target.drawImage(centralPatternCanvas, centerX - radius, centerY - radius, diameter, diameter);
+          return;
+        }
+
+        target.save();
+        target.beginPath();
+        for (let i = 0; i < polygonSides; i++) {
+          const angle = -Math.PI / 2 + (i * Math.PI * 2) / polygonSides;
+          const x = centerX + Math.cos(angle) * radius;
+          const y = centerY + Math.sin(angle) * radius;
+          if (i === 0) target.moveTo(x, y); else target.lineTo(x, y);
+        }
+        target.closePath();
+        target.clip();
+        target.translate(centerX, centerY);
+        target.rotate(rotation);
+        target.translate(-centerX, -centerY);
+        target.drawImage(radialCanvas, patternSourceX, patternSourceY, patternSize, patternSize, centerX - radius, centerY - radius, diameter, diameter);
+        target.restore();
+      }
+
+      if (copyCount > 0) {
+        const copyStep = (backgroundDiameter - centralDiameter) / (copyCount + 1);
+        for (let i = copyCount + 2; i >= 1; i--) {
+          drawPolygonCopy(centralDiameter + copyStep * i);
+        }
+      }
+      drawPolygonCopy(centralDiameter, Number(document.getElementById('centralPatternFeather').value) > 0);
+    }
+
+    function renderRadial(targetCtx, canvasW, canvasH) {
+      prepareSourceCanvas(canvasW, canvasH);
+      
+      targetCtx.fillStyle = '#101114';
+      targetCtx.fillRect(0, 0, canvasW, canvasH);
+      targetCtx.save();
+
+      const globalRotationRad = globalRotationAngle * Math.PI / 180;
+      targetCtx.translate(canvasW / 2, canvasH / 2);
+      targetCtx.rotate(globalRotationRad);
+      targetCtx.translate(-canvasW / 2, -canvasH / 2);
+
+      const sectorCount = Number(radialSegments.value);
+      drawRadialKaleidoscope(canvasW, canvasH, sectorCount, sourceCanvas, targetCtx);
+      targetCtx.restore();
+
+      if (radialMaskToggle && radialMaskToggle.checked) {
+          targetCtx.save();
+          const radius = Math.min(canvasW, canvasH) / 2;
+          
+          targetCtx.beginPath();
+          targetCtx.rect(0, 0, canvasW, canvasH);
+          targetCtx.arc(canvasW/2, canvasH/2, radius, 0, Math.PI * 2, true);
+          targetCtx.clip();
+
+          targetCtx.fillStyle = radialMaskBgColor.value;
+          targetCtx.fillRect(0, 0, canvasW, canvasH);
+
+          const maskMedia = isMaskBgVideo ? maskBgVideo : maskBgImg;
+          if (maskMedia && (isMaskBgVideo ? maskMedia.readyState >= 2 : maskMedia.complete)) {
+              const mw = isMaskBgVideo ? maskMedia.videoWidth : maskMedia.naturalWidth;
+              const mh = isMaskBgVideo ? maskMedia.videoHeight : maskMedia.naturalHeight;
+              if (mw && mh) {
+                  const scale = Math.max(canvasW / mw, canvasH / mh);
+                  const dw = mw * scale;
+                  const dh = mh * scale;
+                  const dx = (canvasW - dw) / 2;
+                  const dy = (canvasH - dh) / 2;
+                  targetCtx.drawImage(maskMedia, dx, dy, dw, dh);
+              }
+          }
+          targetCtx.restore();
+
+          const bw = parseInt(radialMaskBorderWidth.value, 10);
+          if (bw > 0) {
+              targetCtx.save();
+              targetCtx.beginPath();
+              targetCtx.arc(canvasW/2, canvasH/2, radius, 0, Math.PI * 2);
+              targetCtx.lineWidth = bw;
+              targetCtx.strokeStyle = radialMaskBorderColor.value;
+              targetCtx.stroke();
+              targetCtx.restore();
+          }
+      }
+    }
+
+    function renderKaleidoscope(targetCtx, canvasW, canvasH, pixelRatioScale) {
+      const isVideo = mediaElement.tagName === 'VIDEO';
+      const width = isVideo ? mediaElement.videoWidth : mediaElement.naturalWidth;
+      const height = isVideo ? mediaElement.videoHeight : mediaElement.naturalHeight;
+      
+      const R = parseInt(sizeSlider.value, 10) * pixelRatioScale;
+      const sz = parseFloat(sourceZoomSlider.value);
+
+      if (offCanvas.width !== Math.ceil(2 * R)) {
+        offCanvas.width = Math.ceil(2 * R);
+        offCanvas.height = Math.ceil(2 * R);
+      } else {
+        offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+      }
+
+      if (!window.filterCanvas) {
+          window.filterCanvas = document.createElement('canvas');
+          window.filterCtx = window.filterCanvas.getContext('2d');
+      }
+      if (window.filterCanvas.width !== width || window.filterCanvas.height !== height) {
+          window.filterCanvas.width = width;
+          window.filterCanvas.height = height;
+      }
+      window.filterCtx.clearRect(0, 0, width, height);
+      window.filterCtx.filter = getFilterString();
+      window.filterCtx.drawImage(mediaElement, 0, 0, width, height);
+      
+      const featherPercent = parseInt(edgeFeatherSlider.value, 10);
+      if (featherPercent > 0) {
+          window.filterCtx.save();
+          window.filterCtx.globalCompositeOperation = 'destination-in';
+          window.filterCtx.translate(width/2, height/2);
+          window.filterCtx.scale(1, height/width);
+          const gradient = window.filterCtx.createRadialGradient(0, 0, (width/2) * (1 - featherPercent/100), 0, 0, width/2);
+          gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+          gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          window.filterCtx.fillStyle = gradient;
+          window.filterCtx.fillRect(-width/2, -width/2, width, width);
+          window.filterCtx.restore();
+      }
+
+      const sliceAngle = (Math.PI * 2) / segments;
+
+      for (let i = 0; i < segments; i++) {
+        offCtx.save();
+        offCtx.translate(R, R);
+        offCtx.rotate(i * sliceAngle);
+
+        if (i % 2 !== 0) {
+          offCtx.rotate(sliceAngle);
+          offCtx.scale(1, -1);
+        }
+
+        offCtx.beginPath();
+        offCtx.moveTo(0, 0);
+        offCtx.lineTo(R, 0);
+        offCtx.lineTo(R * Math.cos(sliceAngle), R * Math.sin(sliceAngle));
+        offCtx.closePath();
+        offCtx.clip();
+
+        offCtx.rotate(innerAngle);
+        offCtx.scale(sz, sz);
+
+        offCtx.translate(-width * currentFocusX, -height * currentFocusY);
+        
+        if (stream && facingMode === 'user') {
+            offCtx.translate(width, 0);
+            offCtx.scale(-1, 1);
+        }
+
+        offCtx.drawImage(window.filterCanvas, 0, 0, width, height);
+        offCtx.restore();
+      }
+
+      targetCtx.fillStyle = '#101114';
+      targetCtx.fillRect(0, 0, canvasW, canvasH);
+
+      const centerX = canvasW / 2;
+      const centerY = canvasH / 2;
+
+      targetCtx.save();
+      const globalRotationRad = globalRotationAngle * Math.PI / 180;
+      targetCtx.translate(centerX, centerY);
+      targetCtx.rotate(globalRotationRad);
+      targetCtx.translate(-centerX, -centerY);
+
+      const dx = 1.5 * R;
+      const dy = R * Math.sqrt(3);
+
+      const diagonal = Math.hypot(canvasW, canvasH);
+      const cols = Math.ceil((diagonal / 2) / dx) + 1;
+      const rows = Math.ceil((diagonal / 2) / dy) + 1;
+
+      for (let col = -cols; col <= cols; col++) {
+        for (let row = -rows; row <= rows; row++) {
+          let cx = centerX + col * dx;
+          let cy = centerY + row * dy;
+          if (Math.abs(col) % 2 === 1) { cy += dy / 2; }
+          targetCtx.drawImage(offCanvas, cx - R, cy - R, 2 * R + 0.5, 2 * R + 0.5);
+        }
+      }
+      targetCtx.restore();
+    }
+
+    function stopStream() {
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      video.removeAttribute('src');
+      video.load();
+      
+      mediaElement = video;
+      isUploadedVideo = false;
+      videoControlsOverlay.hidden = true;
+      
+      miniCanvas.hidden = true;
+      cpuIndicator.hidden = true;
+      overloadModal.hidden = true;
+      topRecordBtn.hidden = true;
+      stopCamOverlayBtn.hidden = true;
+      folderUploadBtn.hidden = false;
+      switchCamOverlayBtn.hidden = false;
+      switchCamOverlayBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 8.76 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>';
+      
+      if (isRecording) topRecordBtn.click(); 
+      saveButton.disabled = !hasFrame;
+      updateBottomOverlaysPosition();
+    }
+
+    mediaUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      stopStream();
+      
+      const url = URL.createObjectURL(file);
+      status.textContent = 'Загрузка медиа...';
+      
+      if (file.type.startsWith('video/')) {
+        video.srcObject = null;
+        video.src = url;
+        video.loop = true;
+        video.muted = true;
+        isUploadedVideo = true;
+        video.play().then(() => {
+          mediaElement = video;
+          videoControlsOverlay.hidden = false;
+          updateVideoPlayIcon();
+          finishMediaSetup(true);
+        }).catch(err => {
+          status.textContent = 'Ошибка загрузки видео';
+        });
+      } else if (file.type.startsWith('image/')) {
+        isUploadedVideo = false;
+        videoControlsOverlay.hidden = true;
+        uploadedImage.onload = () => {
+          mediaElement = uploadedImage;
+          finishMediaSetup(false);
+        };
+        uploadedImage.src = url;
+      } else {
+        status.textContent = 'Неподдерживаемый формат файла';
+      }
+    });
+
+    function finishMediaSetup(hasVideo) {
+      placeholder.hidden = true;
+      miniCanvas.hidden = false;
+      cpuIndicator.hidden = false;
+      topRecordBtn.hidden = false;
+      stopCamOverlayBtn.hidden = true;
+      folderUploadBtn.hidden = false;
+      
+      switchCamOverlayBtn.hidden = false;
+      switchCamOverlayBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+      
+      status.textContent = 'Файл загружен. Используйте жесты!';
+      updateBottomOverlaysPosition();
+      
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      drawFrame();
+    }
+
+    async function saveImage() {
+      if (!hasFrame) return;
+      status.textContent = 'Обработка...';
+
+      // Делаем снимок текущего Canvas (направляющие HTML не попадут в фото автоматически)
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+      if (!blob) {
+        status.textContent = 'Не удалось подготовить изображение';
+        return;
+      }
+
+      const file = new File([blob], `kaleidoscope_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      status.textContent = 'Изображение сохранено (JPG)';
+    }
+
+    topRecordBtn.addEventListener('click', () => {
+      if (isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        topRecordBtn.classList.remove('recording');
+        status.textContent = 'Видео сохранено';
+      } else {
+        const fps = 30;
+        const recordStream = canvas.captureStream(fps);
+        
+        let mimeType = 'video/mp4';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm';
+        }
+        
+        try {
+            mediaRecorder = new MediaRecorder(recordStream, { mimeType: mimeType });
+        } catch(e) {
+            mediaRecorder = new MediaRecorder(recordStream);
+            mimeType = mediaRecorder.mimeType;
+        }
+        
+        let ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        recordedChunks = [];
+        
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `kaleidoscope_${Date.now()}.${ext}`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 100);
+        };
+        
+        mediaRecorder.start();
+        isRecording = true;
+        topRecordBtn.classList.add('recording');
+        status.textContent = 'Идет запись видео...';
+      }
+    });
+
+    fullscreenBtn.addEventListener('click', () => {
+      const previewSection = document.querySelector('.preview');
+      if (!document.fullscreenElement) {
+        previewSection.requestFullscreen().catch(err => {
+          status.textContent = 'Полноэкранный режим не поддерживается';
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    // ПОЛНОСТЬЮ ОБНОВЛЕННЫЕ СОБЫТИЯ УКАЗАТЕЛЯ ДЛЯ ПЕРЕТАСКИВАНИЯ КАРТИНКИ И ОСЕЙ
+    canvas.addEventListener('pointerdown', (e) => {
+      if (currentMode === 'mirror') {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Нормализованные координаты курсора от центра (-0.5 до 0.5)
+        const nx = (e.clientX - rect.left) / rect.width - 0.5;
+        const ny = (e.clientY - rect.top) / rect.height - 0.5;
+
+        // Поворачиваем точку нажатия обратно (учитывая глобальное вращение)
+        const rad = -globalRotationAngle * Math.PI / 180;
+        const rx = nx * Math.cos(rad) - ny * Math.sin(rad);
+        const ry = nx * Math.sin(rad) + ny * Math.cos(rad);
+
+        const axisX = mirrorSplitX - 0.5;
+        const axisY = mirrorSplitY - 0.5;
+        
+        // Зона захвата оси (расстояние)
+        const hitDist = 40 / Math.min(rect.width, rect.height);
+
+        const hitV = (currentMirrorAxis === 'both' || currentMirrorAxis === 'horizontal') && Math.abs(rx - axisX) < hitDist;
+        const hitH = (currentMirrorAxis === 'both' || currentMirrorAxis === 'vertical') && Math.abs(ry - axisY) < hitDist;
+
+        if (hitV && hitH) {
+            isDraggingAxisV = true; 
+        } else if (hitV) {
+            isDraggingAxisV = true;
+        } else if (hitH) {
+            isDraggingAxisH = true;
+        } else {
+            isDraggingMirror = true;
+        }
+
+        mirrorStartX = e.clientX;
+        mirrorStartY = e.clientY;
+        
+        initialMirrorFocusX = mirrorFocusX;
+        initialMirrorFocusY = mirrorFocusY;
+        initialMirrorSplitX = mirrorSplitX;
+        initialMirrorSplitY = mirrorSplitY;
+        
+        canvas.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (currentMode === 'mirror' && (isDraggingMirror || isDraggingAxisV || isDraggingAxisH)) {
+        const rect = canvas.getBoundingClientRect();
+        const dx = (e.clientX - mirrorStartX) / rect.width;
+        const dy = (e.clientY - mirrorStartY) / rect.height;
+        
+        const rad = -globalRotationAngle * Math.PI / 180;
+        const rotatedDx = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const rotatedDy = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+        if (isDraggingAxisV) {
+            mirrorSplitX = Math.max(0.05, Math.min(0.95, initialMirrorSplitX + rotatedDx));
+        } else if (isDraggingAxisH) {
+            mirrorSplitY = Math.max(0.05, Math.min(0.95, initialMirrorSplitY + rotatedDy));
+        } else if (isDraggingMirror) {
+            mirrorFocusX = Math.max(0, Math.min(1, initialMirrorFocusX - rotatedDx));
+            mirrorFocusY = Math.max(0, Math.min(1, initialMirrorFocusY - rotatedDy));
+        }
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (isDraggingMirror || isDraggingAxisV || isDraggingAxisH) {
+        isDraggingMirror = false;
+        isDraggingAxisV = false;
+        isDraggingAxisH = false;
+        canvas.releasePointerCapture(e.pointerId);
+      }
+    });
+    
+    canvas.addEventListener('pointercancel', (e) => {
+      if (isDraggingMirror || isDraggingAxisV || isDraggingAxisH) {
+        isDraggingMirror = false;
+        isDraggingAxisV = false;
+        isDraggingAxisH = false;
+        canvas.releasePointerCapture(e.pointerId);
+      }
+    });
+
+    miniCanvas.addEventListener('pointerdown', (e) => {
+      if (currentMode === 'mirror') return;
+      const rect = miniCanvas.getBoundingClientRect();
+      let tx = (e.clientX - rect.left) / rect.width;
+      let ty = (e.clientY - rect.top) / rect.height;
+      
+      const minSide = Math.min(miniCanvas.width, miniCanvas.height);
+      const rx = (minSide * 0.05) / miniCanvas.width;
+      const ry = (minSide * 0.05) / miniCanvas.height;
+      
+      targetFocusX = Math.max(rx, Math.min(1 - rx, tx));
+      targetFocusY = Math.max(ry, Math.min(1 - ry, ty));
+      
+      if(e.pointerType === 'touch') e.preventDefault(); 
+    });
+    
+    let initialPinchDist = 0;
+    let initialTwistAngle = 0;
+    let initialRotationValue = 0;
+    let initialSizeValue = 0;
+    let gestureType = null;
+
+    previewSection.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        initialPinchDist = Math.hypot(dx, dy);
+        initialTwistAngle = Math.atan2(dy, dx);
+        initialRotationValue = parseInt(rotationSlider.value, 10);
+        initialSizeValue = parseInt(sizeSlider.value, 10);
+        gestureType = null;
+      }
+    }, { passive: false });
+
+    previewSection.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+
+        let angleDiff = (angle - initialTwistAngle) * (180 / Math.PI);
+        let scale = dist / initialPinchDist;
+
+        if (!gestureType) {
+           if (Math.abs(scale - 1) > 0.05) gestureType = 'pinch';
+           else if (Math.abs(angleDiff) > 5) gestureType = 'rotate';
+        }
+
+        if (gestureType === 'rotate') {
+            globalRotationAngle = (initialRotationValue + angleDiff) % 360;
+            if (globalRotationAngle < 0) globalRotationAngle += 360;
+            rotationSlider.value = Math.round(globalRotationAngle);
+            rotationValue.textContent = Math.round(globalRotationAngle) + '°';
+            status.textContent = `Вращение: ${Math.round(globalRotationAngle)}°`;
+        } else if (gestureType === 'pinch') {
+            let newSize = initialSizeValue * scale;
+            newSize = Math.max(50, Math.min(400, newSize));
+            sizeSlider.value = newSize;
+            sizeValue.textContent = Math.round(newSize);
+            status.textContent = `Размер: ${Math.round(newSize)}`;
+        }
+      }
+    }, { passive: false });
+
+    document.querySelectorAll('.mode-actions button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.mode-actions button').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentMode = e.target.dataset.mode;
+        
+        document.getElementById('radialSettings').style.display = currentMode === 'radial' ? 'block' : 'none';
+        radialMaskMainContainer.hidden = currentMode !== 'radial';
+        
+        verticalZoomContainer.hidden = (currentMode === 'radial' || currentMode === 'mirror');
+        radialOverlayLeft.hidden = currentMode !== 'radial';
+        radialOverlayRight.hidden = currentMode !== 'radial';
+        radialOverlayBottom.hidden = currentMode !== 'radial';
+        sourceZoomContainer.hidden = currentMode === 'radial';
+        
+        if (currentMode === 'mirror') {
+            miniCanvas.style.display = 'none';
+            mirrorOverlay.hidden = false;
+            sourceZoomSlider.min = 1.0;
+            verticalZoomSlider.min = 1.0;
+            if (parseFloat(sourceZoomSlider.value) < 1.0) updateZoom(1.0);
+        } else {
+            miniCanvas.style.display = '';
+            mirrorOverlay.hidden = true;
+            sourceZoomSlider.min = 0.5;
+            verticalZoomSlider.min = 0.5;
+        }
+        
+        updateBottomOverlaysPosition();
+      });
+    });
+
+    switchCamOverlayBtn.addEventListener('click', () => {
+      if (isUploadedVideo || mediaElement !== video || (mediaElement.src && mediaElement.src.startsWith('blob:'))) {
+        stopStream();
+        status.textContent = 'Медиа закрыто';
+      } else if (!stream) {
+        startCamera();
+      } else {
+        facingMode = facingMode === 'environment' ? 'user' : 'environment';
+        startCamera();
+      }
+    });
+    
+    if (stopCamOverlayBtn) {
+        stopCamOverlayBtn.addEventListener('click', () => {
+          stopStream();
+          status.textContent = 'Остановлено';
+        });
+    }
+
+    saveButton.addEventListener('click', saveImage);
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                     window.matchMedia("(max-width: 768px)").matches;
+    if (isMobile) {
+      document.body.classList.add('is-mobile');
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status.textContent = 'Камера доступна только с HTTPS-соединением';
+    }
+  </script>
+</body>
+</html>
