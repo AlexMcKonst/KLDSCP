@@ -37,21 +37,31 @@
       overflow: hidden;
     }
 
-    h1 {
-      margin: 0 0 4px;
-      font-size: 22px;
-      letter-spacing: -0.5px;
-      text-align: center;
+    .top-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
       flex-shrink: 0;
     }
-
-    .description {
-      margin: 0 0 12px;
-      color: #a9abb4;
-      font-size: 13px;
-      text-align: center;
+    
+    .top-settings-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #30323a;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
       flex-shrink: 0;
+      transition: all 0.2s;
     }
+    .top-settings-btn:active { transform: scale(0.95); background: #c5f36b; color: #101114; border-color: #c5f36b; }
+    .top-settings-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
     .preview {
       position: relative;
@@ -118,9 +128,8 @@
     .fullscreen-btn { top: 12px; right: 12px; }
     .switch-cam-btn { top: 12px; right: 12px; z-index: 21; }
     .stop-cam-btn { top: 12px; right: 64px; background: rgba(239, 68, 68, 0.8); }
-    .folder-upload-btn { bottom: 12px; left: 12px; }
-    .settings-toggle-btn { bottom: 12px; right: 12px; background: rgba(0,0,0,0.75); border-color: #c5f36b; color: #c5f36b;}
-    .anim-btn { bottom: 12px; right: 64px; }
+    .folder-upload-btn { bottom: 12px; left: 12px; transition: top 0.3s, bottom 0.3s; }
+    .anim-btn { bottom: 12px; right: 12px; }
     .anim-btn.active { background: #c5f36b; color: #101114; border-color: #c5f36b; }
 
     body.is-mobile .fullscreen-btn { display: none !important; }
@@ -312,9 +321,9 @@
       display: flex; align-items: center; justify-content: center;
     }
 
-    .mode-actions { display: flex; justify-content: center; gap: 6px; margin: 0 0 16px; width: 100%; }
+    .mode-actions { display: flex; justify-content: center; gap: 6px; margin: 0; width: 100%; }
     .mode-actions button {
-      flex: 1; min-height: 44px; padding: 0 16px; border: 1px solid #34363d;
+      flex: 1; min-height: 44px; padding: 0 10px; border: 1px solid #34363d;
       border-radius: 12px; background: #1b1c21; color: #a9abb4; font-size: 14px;
       font-weight: 600; cursor: pointer; transition: all 0.2s;
     }
@@ -391,8 +400,16 @@
 </head>
 <body>
   <main>
-    <h1>Калейдоскоп</h1>
-    <p class="description">Бесшовная генерация паттернов</p>
+    <div class="top-bar">
+      <button id="settingsToggleBtn" class="top-settings-btn" type="button" aria-label="Настройки">
+        <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+      </button>
+      <div class="mode-actions">
+        <button type="button" data-mode="hex" class="active">Соты</button>
+        <button type="button" data-mode="radial">Радиальный</button>
+        <button type="button" data-mode="mirror">Отражение</button>
+      </div>
+    </div>
 
     <section class="preview" aria-label="Предпросмотр изображения с камеры">
       <canvas id="resultCanvas"></canvas>
@@ -440,16 +457,11 @@
       </button>
       
       <button id="switchCamOverlayBtn" class="overlay-btn switch-cam-btn" type="button">
-        <svg viewBox="0 0 24 24"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 8.76 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M9 12c0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3-3 1.34-3 3zm8.31-4H15L13.5 6h-3L9 8H6.69C5.76 8 5 9.69v9.63C5 20.24 5.76 21 6.69 21h10.63C18.24 21 19 20.24 19 19.31V9.69C19 8.76 18.24 8 17.31 8zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
       </button>
       
       <button id="stopCamOverlayBtn" class="overlay-btn stop-cam-btn" type="button" hidden>
         <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-
-      <!-- Новая кнопка Шестеренки -->
-      <button id="settingsToggleBtn" class="overlay-btn settings-toggle-btn" type="button">
-        <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
       </button>
 
       <button id="animOverlayBtn" class="overlay-btn anim-btn" type="button">
@@ -520,12 +532,6 @@
             <button id="closeSettingsBtn" class="close-settings-btn">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
-        </div>
-
-        <div class="mode-actions">
-          <button type="button" data-mode="hex" class="active">Соты</button>
-          <button type="button" data-mode="radial">Радиальный</button>
-          <button type="button" data-mode="mirror">Отражение</button>
         </div>
 
         <div class="quick-settings-row">
@@ -605,7 +611,7 @@
             <select id="aspectRatioSelect">
               <option value="1:1">1:1</option>
               <option value="3:4">3:4 (Верт)</option>
-              <option value="9:16">9:16 (Верт)</option>
+              <option value="9:16" selected>9:16 (Верт)</option>
             </select>
             <button id="saveButton" class="action-btn" type="button" disabled>Сохранить (JPG)</button>
           </div>
@@ -907,7 +913,18 @@
       if (miniCanvas.width !== mw || miniCanvas.height !== mh) { miniCanvas.width = mw; miniCanvas.height = mh; }
       miniCtx.drawImage(mediaElement, 0, 0, mw, mh);
 
-      currentFocusX += (targetFocusX - currentFocusX) * 0.1; currentFocusY += (targetFocusY - currentFocusY) * 0.1;
+      const speed = 0.03;
+      const dxF = targetFocusX - currentFocusX;
+      const dyF = targetFocusY - currentFocusY;
+      const distF = Math.hypot(dxF, dyF);
+      if (distF > speed) {
+        currentFocusX += (dxF / distF) * speed;
+        currentFocusY += (dyF / distF) * speed;
+      } else {
+        currentFocusX = targetFocusX;
+        currentFocusY = targetFocusY;
+      }
+
       if (currentMode !== 'mirror') {
         miniCtx.fillStyle = 'rgba(255, 60, 60, 0.9)'; miniCtx.beginPath();
         miniCtx.arc(mw * currentFocusX, mh * currentFocusY, Math.min(mw, mh) * 0.05, 0, Math.PI * 2); miniCtx.fill();
@@ -1371,11 +1388,19 @@
             sourceZoomSlider.min = 1.0; 
             verticalZoomSlider.min = 1.0; 
             if (parseFloat(sourceZoomSlider.value) < 1.0) updateZoom(1.0); 
+            
+            animOverlayBtn.hidden = true;
+            folderUploadBtn.style.bottom = 'auto';
+            folderUploadBtn.style.top = '12px';
         } else { 
             miniCanvas.style.display = ''; 
             mirrorOverlay.hidden = true; 
             sourceZoomSlider.min = 0.5; 
             verticalZoomSlider.min = 0.5; 
+            
+            animOverlayBtn.hidden = false;
+            folderUploadBtn.style.top = 'auto';
+            folderUploadBtn.style.bottom = '12px';
         }
         updateBottomOverlaysPosition();
       });
