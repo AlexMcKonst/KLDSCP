@@ -100,6 +100,7 @@
       background: #000;
       cursor: crosshair;
       object-fit: cover;
+      touch-action: none;
     }
     .mini-canvas[hidden] { display: none !important; }
 
@@ -546,6 +547,12 @@
           <label class="anim-toggle"><input type="checkbox" id="patternAnimToggle"> Узор</label>
           <label class="anim-toggle"><input type="checkbox" id="innerAnimToggle"> Кадр</label>
         </div>
+
+        <!-- Добавлена настройка плавности перемещения точки -->
+        <div class="slider-container" id="pointSmoothnessContainer">
+          <label><span>Плавность точки</span><span id="pointSmoothnessValue">80%</span></label>
+          <input type="range" id="pointSmoothnessSlider" min="0" max="100" step="1" value="80">
+        </div>
         
         <div id="radialMaskMainContainer" class="radial-mask-settings-row" hidden>
             <label class="anim-toggle" style="font-size: 14px; font-weight: 600; color: white;">
@@ -689,12 +696,24 @@
     const filterSelect = document.getElementById('filterSelect');
     const topRecordBtn = document.getElementById('topRecordBtn');
     
+    // Переменные для фокуса и плавности
+    let smoothnessPercent = 80;
+    let isPointerDownOnMini = false;
     let isDraggingMirror = false, isDraggingAxisV = false, isDraggingAxisH = false;
     let mirrorStartX = 0, mirrorStartY = 0;
     let mirrorFocusX = 0.5, mirrorFocusY = 0.5, initialMirrorFocusX = 0.5, initialMirrorFocusY = 0.5;
     let mirrorSplitX = 0.5, mirrorSplitY = 0.5, initialMirrorSplitX = 0.5, initialMirrorSplitY = 0.5;
     let mirrorSideH = 'right', mirrorSideV = 'bottom', currentMirrorAxis = 'horizontal';
     
+    const pointSmoothnessContainer = document.getElementById('pointSmoothnessContainer');
+    const pointSmoothnessSlider = document.getElementById('pointSmoothnessSlider');
+    const pointSmoothnessValue = document.getElementById('pointSmoothnessValue');
+    
+    pointSmoothnessSlider.addEventListener('input', (e) => {
+        smoothnessPercent = parseInt(e.target.value);
+        pointSmoothnessValue.textContent = smoothnessPercent + '%';
+    });
+
     const mirrorBtns = document.querySelectorAll('.mirror-btn[data-axis]');
     const mirrorSwapHBtn = document.getElementById('mirrorSwapHBtn');
     const mirrorSwapVBtn = document.getElementById('mirrorSwapVBtn');
@@ -913,13 +932,20 @@
       if (miniCanvas.width !== mw || miniCanvas.height !== mh) { miniCanvas.width = mw; miniCanvas.height = mh; }
       miniCtx.drawImage(mediaElement, 0, 0, mw, mh);
 
-      const speed = 0.03;
+      // Математика ПЛАВНОГО перемещения (интерполяция)
       const dxF = targetFocusX - currentFocusX;
       const dyF = targetFocusY - currentFocusY;
       const distF = Math.hypot(dxF, dyF);
-      if (distF > speed) {
-        currentFocusX += (dxF / distF) * speed;
-        currentFocusY += (dyF / distF) * speed;
+
+      if (distF > 0.0001) {
+        // Преобразуем 0..100% в экспоненциальное замедление
+        const factor = smoothnessPercent / 100;
+        const slowSpeed = 0.003 + Math.pow(1 - factor, 2.2) * 0.45;
+        // Если палец удерживается на экране, скорость немного повышается для лучшего отклика
+        const speed = isPointerDownOnMini ? Math.max(slowSpeed * 1.5, 0.02) : slowSpeed;
+
+        currentFocusX += dxF * speed;
+        currentFocusY += dyF * speed;
       } else {
         currentFocusX = targetFocusX;
         currentFocusY = targetFocusY;
@@ -1326,7 +1352,8 @@
     canvas.addEventListener('pointerup', (e) => { if (isDraggingMirror || isDraggingAxisV || isDraggingAxisH) { isDraggingMirror = false; isDraggingAxisV = false; isDraggingAxisH = false; canvas.releasePointerCapture(e.pointerId); } });
     canvas.addEventListener('pointercancel', (e) => { if (isDraggingMirror || isDraggingAxisV || isDraggingAxisH) { isDraggingMirror = false; isDraggingAxisV = false; isDraggingAxisH = false; canvas.releasePointerCapture(e.pointerId); } });
 
-    miniCanvas.addEventListener('pointerdown', (e) => {
+    // УПРАВЛЕНИЕ ЗАХВАТОМ И ПЕРЕМЕЩЕНИЕМ ТОЧКИ ПО МИНИ-КАНВАСУ
+    function updateMiniTarget(e) {
       if (currentMode === 'mirror') return;
       const rect = miniCanvas.getBoundingClientRect();
       const mw = mediaElement.tagName === 'VIDEO' ? mediaElement.videoWidth : mediaElement.naturalWidth;
@@ -1343,9 +1370,30 @@
       let ty = (e.clientY - rect.top - offsetY) / renderedH;
 
       const minSide = Math.min(mw, mh), rx = (minSide * 0.05) / mw, ry = (minSide * 0.05) / mh;
-      targetFocusX = Math.max(rx, Math.min(1 - rx, tx)); targetFocusY = Math.max(ry, Math.min(1 - ry, ty));
-      if(e.pointerType === 'touch') e.preventDefault(); 
+      targetFocusX = Math.max(rx, Math.min(1 - rx, tx)); 
+      targetFocusY = Math.max(ry, Math.min(1 - ry, ty));
+    }
+
+    miniCanvas.addEventListener('pointerdown', (e) => {
+      isPointerDownOnMini = true;
+      try { miniCanvas.setPointerCapture(e.pointerId); } catch(err){}
+      updateMiniTarget(e);
+      if(e.pointerType === 'touch') e.preventDefault();
     });
+
+    miniCanvas.addEventListener('pointermove', (e) => {
+      if (!isPointerDownOnMini) return;
+      updateMiniTarget(e);
+      e.preventDefault();
+    });
+
+    function releaseMiniPointer(e) {
+      isPointerDownOnMini = false;
+      try { miniCanvas.releasePointerCapture(e.pointerId); } catch(err){}
+    }
+    miniCanvas.addEventListener('pointerup', releaseMiniPointer);
+    miniCanvas.addEventListener('pointercancel', releaseMiniPointer);
+
     
     let initialPinchDist = 0, initialTwistAngle = 0, initialRotationValue = 0, initialSizeValue = 0, gestureType = null;
     previewSection.addEventListener('touchstart', (e) => {
@@ -1392,6 +1440,22 @@
             animOverlayBtn.hidden = true;
             folderUploadBtn.style.bottom = 'auto';
             folderUploadBtn.style.top = '12px';
+
+            // Останавливаем анимацию при переходе в режим Отражение
+            isPatternAnimating = false;
+            isInnerAnimating = false;
+            patternAnimToggle.checked = false;
+            document.getElementById('innerAnimToggle').checked = false;
+            syncAnimOverlayBtn();
+
+            // Сбрасываем вращение
+            globalRotationAngle = 0;
+            rotationSlider.value = 0;
+            rotationValue.textContent = '0°';
+            
+            // Скрываем настройку плавности перемещения, т.к. она не используется
+            if (pointSmoothnessContainer) pointSmoothnessContainer.hidden = true;
+
         } else { 
             miniCanvas.style.display = ''; 
             mirrorOverlay.hidden = true; 
@@ -1401,6 +1465,8 @@
             animOverlayBtn.hidden = false;
             folderUploadBtn.style.top = 'auto';
             folderUploadBtn.style.bottom = '12px';
+            
+            if (pointSmoothnessContainer) pointSmoothnessContainer.hidden = false;
         }
         updateBottomOverlaysPosition();
       });
